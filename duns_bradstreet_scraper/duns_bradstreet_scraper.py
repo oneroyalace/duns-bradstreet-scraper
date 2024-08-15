@@ -74,7 +74,7 @@ class DBScraper:
         num_results_divs = len(self._driver.find_elements(By.CLASS_NAME, "search-results-card-container"))  # search results div
         
         all_duns_results = []
-        breakpoint()
+        # breakpoint()
         for result_index in range(num_results_divs):
             all_duns_results.append(self._email_and_extract_duns_result(result_index))
 
@@ -112,7 +112,7 @@ class DBScraper:
         time.sleep(0.5)
         email_request_div.find_element(By.NAME, 'LAST_NAME').send_keys('Jokosa')
         time.sleep(0.5)
-        email_request_div.find_element(By.NAME, 'EMAIL_ADDRESS').send_keys('asa.royal@duke.edu') 
+        email_request_div.find_element(By.NAME, 'EMAIL_ADDRESS').send_keys('thomasapyncheon@gmail.com') 
         time.sleep(0.5)
 
         # Submit email request form

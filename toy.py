@@ -1,7 +1,7 @@
 import csv
 import re
 
-from duns_bradstreet_scraper.duns_bradstreet_scraper import DunsBradstreetScaper
+from duns_bradstreet_scraper.duns_bradstreet_scraper import DBScraper
 
 
 def clean_employer_name(emp_name):
@@ -46,7 +46,7 @@ def clean_employer_name(emp_name):
     emp_name = emp_name.strip()
     return emp_name
 
-scraper = DunsBradstreetScaper()
+scraper = DBScraper()
 
 with open("/home/grog/hub/unions_newspapers/5_clean_and_merge_union_data/nlrb_nxgen_dataset_2.csv", "r") as infile:
     reader = csv.DictReader(infile)
@@ -57,7 +57,7 @@ with open("/home/grog/hub/common_datasets/geography/state_identifiers.csv", "r")
     state_initial_map = {row["state_abbr"]: row["state_name"] for row in reader}
 
 
-with open("duns_company_data.csv", "r") as infile:
+with open("toy_outputs/duns_company_data.csv", "r") as infile:
     reader = csv.DictReader(infile)
     all_duns_results = [row for row in reader]
 
@@ -89,7 +89,7 @@ for election_index, union_election in enumerate(union_elections):
     all_duns_results.extend(duns_results)
 
     if election_index % 10 == 1:
-        with open("duns_company_data.csv", "w+") as infile:
+        with open("toy_outputs/duns_company_data.csv", "w+") as infile:
             writer = csv.DictWriter(infile, fieldnames=all_duns_results[0].keys())
             writer.writeheader()
             writer.writerows(all_duns_results)
