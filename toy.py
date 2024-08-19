@@ -1,8 +1,12 @@
 import csv
+import math
+import random
 import re
 import time
 
-from duns_bradstreet_scraper.duns_bradstreet_scraper import DBScraper
+import pyautogui
+
+from duns_bradstreet_scraper.duns_bradstreet_scraper import DBScraper, DNBServerException
 
 
 def clean_employer_name(emp_name):
@@ -60,7 +64,42 @@ def truncate_employer_name(emp_name: str, char_limit: int) -> str:
         truncated_name = " ".join([truncated_name, word])  # Add next word to name
     return truncated_name
 
-scraper = DBScraper()
+"""
+Use pyautogui to switch to a new ProtonVPN server and hopefully juke anti-scraping tech
+"""
+def rotate_vpn_server():
+    open_protonvpn()
+    connect_to_new_server()
+    switch_focus_back_to_chrome()
+
+
+"""
+Use pyautogui to open the ProtonVPN app
+"""
+def open_protonvpn() -> None:
+    pyautogui.hotkey("command", "space")
+    time.sleep(0.2)
+    pyautogui.write("Proton")
+    pyautogui.press("enter")
+
+"""
+Use pyautogui to connect to a new US-based ProtonVPN server
+"""
+def connect_to_new_server() -> None:
+    pyautogui.moveTo(263, 365)  # Hover over US server profile
+    time.sleep(1)
+    pyautogui.click()  # Click "connnect" for US server profile
+
+    print("Sleeping for 15 seconds while connecting to new server")
+    time.sleep(15)
+
+def switch_focus_back_to_chrome() -> None:
+    pyautogui.hotkey("command", "space")
+    time.sleep(0.2)
+    pyautogui.write("chrome")
+    pyautogui.press("enter")
+
+
 
 with open("toy_inputs/nlrb_nxgen_dataset_2.csv", "r") as infile:
     reader = csv.DictReader(infile)
@@ -75,6 +114,11 @@ with open("toy_outputs/duns_company_data.csv", "r") as infile:
     reader = csv.DictReader(infile)
     all_duns_results = [row for row in reader]
 
+
+scraper = DBScraper()
+print("RECONNECT TO VPN")
+# rotate_vpn_server()
+scrapes_until_server_switch = 30
 
 # Note: Code below might search for a company multiple times. Fix that
 for election_index, union_election in enumerate(union_elections):
@@ -99,7 +143,13 @@ for election_index, union_election in enumerate(union_elections):
         union_elections[election_index]["scraped"] = 3
         continue
 
+
+    if scrapes_until_server_switch == 0:
+        rotate_vpn_server()
+        scrapes_until_server_switch = math.floor(random.gauss(35,5))
+
     print(f"*****Processing election #{election_index} ({case_number}: {company_name})*****")
+    print(f"Scrapes until server switch: {scrapes_until_server_switch}")
 
     if len(company_name) >= 30: 
         company_name = truncate_employer_name(company_name, char_limit=30)
@@ -112,8 +162,10 @@ for election_index, union_election in enumerate(union_elections):
                 company_city=company_city
                 # company_zip=company_zip,
                 )
-    except RuntimeError:
+    except DNBServerException:
         union_elections[election_index]["scraped"] = 4
+        rotate_vpn_server()
+        scrapes_until_server_switch = math.floor(random.gauss(35,5))
         continue
 
     # Add NLRB election case number
@@ -123,18 +175,20 @@ for election_index, union_election in enumerate(union_elections):
     union_elections[election_index]["scraped"] = 1
 
     time.sleep(2)
+    scrapes_until_server_switch -= 1
 
     all_duns_results.extend(duns_results)
 
     if election_index % 5 == 1:
         print("Saving progress to disk")
-        with open("toy_outputs/duns_company_data.csv", "a", newline="") as outfile:
+        with open("toy_outputs/duns_company_data.csv", "w+", newline="") as outfile:
             writer = csv.DictWriter(outfile, fieldnames=all_duns_results[0].keys())
-            # writer.writeheader()
+            writer.writeheader()
             writer.writerows(all_duns_results)
 
         with open("toy_inputs/nlrb_nxgen_dataset_2.csv", "w+", newline="") as outfile:
             writer = csv.DictWriter(outfile, fieldnames = union_elections[0].keys())
             writer.writeheader()
             writer.writerows(union_elections)
+
 
