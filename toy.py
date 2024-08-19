@@ -47,6 +47,19 @@ def clean_employer_name(emp_name):
     emp_name = emp_name.strip()
     return emp_name
 
+def truncate_employer_name(emp_name: str, char_limit: int) -> str:
+    words = emp_name.split(" ")
+    truncated_name = ""
+
+    if len(emp_name) <= char_limit:
+        return emp_name
+
+    for word in words:
+        if (len(truncated_name) + len(word)) + 1 > char_limit:  # If adding the next word would put the name over the character limit...
+            break
+        truncated_name = " ".join([truncated_name, word])  # Add next word to name
+    return truncated_name
+
 scraper = DBScraper()
 
 with open("toy_inputs/nlrb_nxgen_dataset_2.csv", "r") as infile:
@@ -65,10 +78,12 @@ with open("toy_outputs/duns_company_data.csv", "r") as infile:
 
 # Note: Code below might search for a company multiple times. Fix that
 for election_index, union_election in enumerate(union_elections):
-    if union_election.get("scraped") in [1,2,3]:
+    if union_election["scraped"] in ["1","2","3"]:
         continue
 
-    company_name = clean_employer_name(union_election["employer_name"])
+    company_name = union_election["employer_name"]
+    company_name = clean_employer_name(company_name)
+
     company_city = union_election["emp_1_city"]
     company_state = state_initial_map.get(union_election["emp_1_state"])
     # company_zip = union_election["emp_1_zip"]  # should we really use this?
@@ -84,14 +99,22 @@ for election_index, union_election in enumerate(union_elections):
         union_elections[election_index]["scraped"] = 3
         continue
 
-    print(election_index, case_number, company_name)
+    print(f"*****Processing election #{election_index} ({case_number}: {company_name})*****")
 
-    duns_results = scraper.execute_search(
-            company_name=company_name,
-            company_state=company_state,
-            company_city=company_city
-            # company_zip=company_zip,
-            )
+    if len(company_name) >= 30: 
+        company_name = truncate_employer_name(company_name, char_limit=30)
+        print(f"Truncated company name to {company_name}")
+
+    try:
+        duns_results = scraper.execute_search(
+                company_name=company_name,
+                company_state=company_state,
+                company_city=company_city
+                # company_zip=company_zip,
+                )
+    except RuntimeError:
+        union_elections[election_index]["scraped"] = 4
+        continue
 
     # Add NLRB election case number
     duns_results = [result | {"case_number": case_number} for result in duns_results]
@@ -103,16 +126,15 @@ for election_index, union_election in enumerate(union_elections):
 
     all_duns_results.extend(duns_results)
 
-    if election_index % 10 == 1:
-        with open("toy_outputs/duns_company_data.csv", "w+") as outfile:
+    if election_index % 5 == 1:
+        print("Saving progress to disk")
+        with open("toy_outputs/duns_company_data.csv", "a", newline="") as outfile:
             writer = csv.DictWriter(outfile, fieldnames=all_duns_results[0].keys())
-            writer.writeheader()
+            # writer.writeheader()
             writer.writerows(all_duns_results)
 
-        with open("toy_inputs/nlrb_nxgen_dataset_2.csv", "w+") as outfile:
+        with open("toy_inputs/nlrb_nxgen_dataset_2.csv", "w+", newline="") as outfile:
             writer = csv.DictWriter(outfile, fieldnames = union_elections[0].keys())
             writer.writeheader()
             writer.writerows(union_elections)
-
-
 
