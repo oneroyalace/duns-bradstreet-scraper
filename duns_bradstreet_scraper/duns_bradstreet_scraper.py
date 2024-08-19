@@ -10,6 +10,11 @@ from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
+
+# Aka they've caught us scraping
+class DNBServerException(RuntimeError):
+    pass
+
 class DBScraper:
     def __init__(self):
         self._duns_bradstreet_url = "https://www.dnb.com/duns-number/lookup.html"
@@ -50,8 +55,8 @@ class DBScraper:
         self._search_for_company(company_name, company_city, company_zip, company_state)
 
         if self._check_for_error():
-            self._logger.error("DNB system error!!!! Rotate IP address?")
-            raise RuntimeError("DNB system error")
+            self._logger.error("DNB server error!!!! Rotate IP address?")
+            raise DNBServerException("DNB server error")
 
         duns_results = self._email_and_extract_duns_results()
         return duns_results
@@ -89,7 +94,7 @@ class DBScraper:
 
         # Submit search
         search_box = self._driver.find_element(By.ID, 'submit-search')
-        search_box.click() 
+        search_box.submit() 
         time.sleep(2)
 
     def _email_and_extract_duns_results(self) -> list[dict]:
@@ -150,6 +155,7 @@ class DBScraper:
         # Submit email request form
         final_submit_button = email_request_div.find_element(By.CLASS_NAME, "requestform__submit")
         self._driver.execute_script("arguments[0].scrollIntoView(true);", final_submit_button)
+        time.sleep(1)
         final_submit_button.click()
         time.sleep(5)
 
