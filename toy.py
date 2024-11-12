@@ -116,13 +116,12 @@ with open("toy_outputs/duns_company_data.csv", "r") as infile:
 
 
 scraper = DBScraper()
-print("RECONNECT TO VPN")
-# rotate_vpn_server()
+rotate_vpn_server()
 scrapes_until_server_switch = 30
 
 # Note: Code below might search for a company multiple times. Fix that
 for election_index, union_election in enumerate(union_elections):
-    if union_election["scraped"] in ["1","2","3"]:
+    if union_election["scraped"] in ["1","2","3", "4"]:
         continue
 
     company_name = union_election["employer_name"]
@@ -143,10 +142,12 @@ for election_index, union_election in enumerate(union_elections):
         union_elections[election_index]["scraped"] = 3
         continue
 
+    new_vpn_server = False
 
-    if scrapes_until_server_switch == 0:
+    if scrapes_until_server_switch <= 0:
         rotate_vpn_server()
         scrapes_until_server_switch = math.floor(random.gauss(35,5))
+        new_vpn_server = True
 
     print(f"*****Processing election #{election_index} ({case_number}: {company_name})*****")
     print(f"Scrapes until server switch: {scrapes_until_server_switch}")
@@ -159,13 +160,14 @@ for election_index, union_election in enumerate(union_elections):
         duns_results = scraper.execute_search(
                 company_name=company_name,
                 company_state=company_state,
-                company_city=company_city
+                company_city=company_city,
+                new_vpn_server=new_vpn_server
                 # company_zip=company_zip,
                 )
     except DNBServerException:
         union_elections[election_index]["scraped"] = 4
-        rotate_vpn_server()
-        scrapes_until_server_switch = math.floor(random.gauss(35,5))
+        # rotate_vpn_server()
+        scrapes_until_server_switch -= 15 
         continue
 
     # Add NLRB election case number
