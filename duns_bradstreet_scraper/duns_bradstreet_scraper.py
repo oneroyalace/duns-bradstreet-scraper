@@ -2,9 +2,11 @@ import csv
 import logging
 import time
 import re
+from datetime import timedelta
 
+import arrow
 import undetected_chromedriver as uc
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException, WebDriverException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
@@ -27,21 +29,30 @@ class DBScraper:
         self._driver = uc.Chrome()
         self._driver.implicitly_wait(3)  # Tell driver to wait 5 seconds before returning NoSuchElementException
         
-        self._open_dnb_first_time()
+        self._load_dnb_search_page()
 
     """
     Open Duns Bradstreet search page. Close cookie pop-up if shows up
+    params:
+        handle_cookie_popup (bool): If true, look for and close the GDPR cookie popup 
     """
-    def _open_dnb_first_time(self) -> None:
+    def _load_dnb_search_page(self, handle_cookie_popup: bool = True) -> None:
         self._driver.get(self._duns_bradstreet_url)
         time.sleep(2) 
         # Close cookie pop-up
+        self._handle_cookie_popup()
+
+    """
+    Closes the GDPR cookie pop-up if it's present
+    """
+    def _handle_cookie_popup(self) -> None:
         try:
             cookie_close_button = self._driver.find_element(By.ID, "truste-consent-required")
             cookie_close_button.click()
         except NoSuchElementException:
             pass
         time.sleep(2)
+        
 
     def _set_up_logger(self) -> None:
         logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
@@ -49,10 +60,37 @@ class DBScraper:
         self._logger = logging.getLogger()
         self._logger.setLevel(logging.INFO)
 
-    def execute_search(self, company_name, company_state, company_city="", company_zip="") -> list[dict]:
+    """
+    Entrypoint to DNB screaper. Searches for a company by name/city/state, then extracts information from search results and generates a DNB number email
+    params:
+        company_name(str)
+        company_state(str)
+        company_cit(str)
+        company_zip(str)
+        new_vpn_server(bool): True if we've just switched VPN servers. After switching servers, we need to check for the cookie popup again
+    """
+    def execute_search(self, company_name: str, company_state: str, company_city="", company_zip="", new_vpn_server=False) -> list[dict]:
 
-        self._reset_search_page()
-        self._search_for_company(company_name, company_city, company_zip, company_state)
+
+        max_search_tries=3
+        try_number = 1
+        # This is ugly. I should just wrap a retry decorator around the reset_search_page and _search_for_company methods...
+        while try_number <= max_search_tries:
+            try:
+                self._load_dnb_search_page(handle_cookie_popup=False)
+                self._search_for_company(company_name, company_city, company_zip, company_state)
+                break
+            except NoSuchElementException:
+                self._logger.error(f"Could not find search container on attempt {try_number}/{max_search_tries}")
+            except WebDriverException:
+                self._logger.error(f"Could not load search page on attemp {try_number}/{max_search_tries}")
+
+            try_number += 1
+
+        if try_number == max_search_tries:
+            self._logger.error("Could not locate search container after {max_search_tries} tries. Rotate server?")
+            raise DNBServerException()
+
 
         if self._check_for_error():
             self._logger.error("DNB server error!!!! Rotate IP address?")
@@ -61,15 +99,6 @@ class DBScraper:
         duns_results = self._email_and_extract_duns_results()
         return duns_results
 
-    """
-    Navigate to or refresh the Duns Bradstreet search page
-    """
-    def _reset_search_page(self) -> None:
-        self._driver.get(self._duns_bradstreet_url)
-
-    """
-    Fill in company details and submit search form
-    """
     def _search_for_company(self, company_name: str, company_city: str, company_zip: str, company_state: str) -> None:
         search_type_selector = Select(self._driver.find_element(By.NAME, "primary-reason-dropdown-select-component"))
         search_type_selector.select_by_visible_text("My company")
@@ -119,11 +148,17 @@ class DBScraper:
         if success_modal is not None:
             self._logger.info(f"Succesfully triggered email for result #{result_index}")
             duns_results["email_success"] = True
+            duns_results["time_email_requested"] = arrow.now() - timedelta(seconds=5)
         else:
             self._logger.warn(f"Could not trigger email for result #{result_index}")
+            time.sleep(1)  
             duns_results["email_success"] = False
 
-        self._close_modal()
+        # :). Sorry. Use retry decorator later
+        try:
+            self._close_modal()
+        except (StaleElementReferenceException, ElementClickInterceptedException):
+            breakpoint()
         return duns_results
 
     """
@@ -134,7 +169,7 @@ class DBScraper:
         all_results_divs = self._driver.find_elements(By.CLASS_NAME, "search-results-card-container")
         nth_results_div = all_results_divs[result_index]  # Find the nth result div
         time.sleep(0.5)
-        self._driver.execute_script("arguments[0].scrollIntoView(true);", nth_results_div)  # Scroll results div into view
+        self._center_element(nth_results_div)  # Scroll results div into view
         return nth_results_div
 
     def _request_email_for_result(self, result_div: WebElement):
@@ -154,7 +189,7 @@ class DBScraper:
 
         # Submit email request form
         final_submit_button = email_request_div.find_element(By.CLASS_NAME, "requestform__submit")
-        self._driver.execute_script("arguments[0].scrollIntoView(true);", final_submit_button)
+        self._center_element(final_submit_button)
         time.sleep(1)
         final_submit_button.click()
         time.sleep(5)
@@ -176,10 +211,38 @@ class DBScraper:
     Can be used to hide the success notification or exit a failed email request window
     """
     def _close_modal(self) -> None: 
+        # gonna try sleeping for a second before entering this method to see if that resolves below...
+        # Traceback (most recent call last):
+        #   File "/Users/ajr74/hub/duns-bradstreet-scraper/toy.py", line 160, in <module>
+        #     duns_results = scraper.execute_search(
+        #                    ^^^^^^^^^^^^^^^^^^^^^^^
+        #   File "/Users/ajr74/hub/duns-bradstreet-scraper/duns_bradstreet_scraper/duns_bradstreet_scraper.py", line 95, in execute_search
+        #     duns_results = self._email_and_extract_duns_results()
+        #                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #   File "/Users/ajr74/hub/duns-bradstreet-scraper/duns_bradstreet_scraper/duns_bradstreet_scraper.py", line 140, in _email_and_extract_duns_results
+        #     all_duns_results.append(self._email_and_extract_duns_result(result_index))
+        #                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #   File "/Users/ajr74/hub/duns-bradstreet-scraper/duns_bradstreet_scraper/duns_bradstreet_scraper.py", line 160, in _email_and_extract_duns_result
+        #     self._close_modal()
+        #   File "/Users/ajr74/hub/duns-bradstreet-scraper/duns_bradstreet_scraper/duns_bradstreet_scraper.py", line 216, in _close_modal
+        #     close_button.click()
+        #   File "/opt/homebrew/Caskroom/miniconda/base/envs/py311/lib/python3.11/site-packages/selenium/webdriver/remote/webelement.py", line 94, in click
+        #     self._execute(Command.CLICK_ELEMENT)
+        #   File "/opt/homebrew/Caskroom/miniconda/base/envs/py311/lib/python3.11/site-packages/selenium/webdriver/remote/webelement.py", line 395, in _execute
+        #     return self._parent.execute(command, params)
+        #            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        #   File "/opt/homebrew/Caskroom/miniconda/base/envs/py311/lib/python3.11/site-packages/selenium/webdriver/remote/webdriver.py", line 354, in execute
+        #     self.error_handler.check_response(response)
+        #   File "/opt/homebrew/Caskroom/miniconda/base/envs/py311/lib/python3.11/site-packages/selenium/webdriver/remote/errorhandler.py", line 229, in check_response
+        #     raise exception_class(message, screen, stacktrace)
+        # selenium.common.exceptions.ElementClickInterceptedException: Message: element click intercepted: Element <button class="requestform__close" aria-label="Request Form close button">...</button> is not clickable at point (12
+        # 63, 351). Other element would receive the click: <span class="full-screen-loader"></span>
+        #   (Session info: chrome=127.0.6533.120)Message: no such element: Unable to locate element: {"method":"css selector","selector":".full-screen-loader"}
+        time.sleep(4) # ???????????????
         close_button = self._driver.find_element(By.CLASS_NAME, "requestform__close")
-        self._driver.execute_script("arguments[0].scrollIntoView(true);", close_button)
+        self._center_element(close_button)
         close_button.click()
-        time.sleep(2)
+        time.sleep(1.5)
 
     """
     Extract company data from result div
@@ -202,6 +265,18 @@ class DBScraper:
 
 
     """
+    Scroll to vertically center element in viewport
+    """
+    def _center_element(self, elem: WebElement) -> None:
+        desired_y = (elem.size["height"] / 2) + elem.location["y"]
+        window_h = self._driver.execute_script("return window.innerHeight")
+        window_y = self._driver.execute_script("return window.pageYOffset")
+        current_y = (window_h / 2) + window_y
+        scroll_y_by = desired_y - current_y
+        self._driver.execute_script("window.scrollBy(0, arguments[0]);", scroll_y_by)  # Scroll results div into view
+
+
+    """
     If I've made too many searches from an IP address, D&B will print a message on some searches that reades
     "An unexpected system error has been encountered. If the issue persists please contact support@dnb.com"
     
@@ -209,7 +284,7 @@ class DBScraper:
     """
     def _check_for_error(self) -> bool:
         try:
-            error_elem = self._driver.find_element(By.CLASS_NAME, "direct-plus-search-error-text-row")
+            error_elem = self._driver.find_element(By.CLASS_NAME, "direct-plus-search-error-text")
+            return True
         except NoSuchElementException:
             return False
-        return True
