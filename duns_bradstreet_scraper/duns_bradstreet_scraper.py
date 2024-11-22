@@ -17,10 +17,14 @@ from selenium.webdriver.support.ui import Select, WebDriverWait
 class DNBServerException(RuntimeError):
     pass
 
+# immediately switch vpn servers...
+class DNBRejectionException(RuntimeError):
+    pass
+
 class DBScraper:
-    def __init__(self):
+    def __init__(self, logger=None):
         self._duns_bradstreet_url = "https://www.dnb.com/duns-number/lookup.html"
-        self._logger = None
+        self._logger = logger
         self._driver = None
         self._initialize()
 
@@ -55,10 +59,25 @@ class DBScraper:
         
 
     def _set_up_logger(self) -> None:
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+        if self._logger is not None: return
+        logging.basicConfig(level=logging.INFO, 
+                            format="%(asctime)s %(levelname)s: %(message)s", 
+                            datefmt="%Y-%m-%d %H:%M:%S")
         logging.StreamHandler().setLevel(logging.INFO)
         self._logger = logging.getLogger()
         self._logger.setLevel(logging.INFO)
+
+    """
+    Check whether DNB is showing us an "access denied" screen
+    """
+    def _check_access_denied(self) -> True:
+        try:
+            first_h1 = self._driver.find_element(By.TAG_NAME, "h1")
+            if "Access Denied" in first_h1.text:
+                return True
+        except NoSuchElementException:
+            pass
+        return False
 
     """
     Entrypoint to DNB screaper. Searches for a company by name/city/state, then extracts information from search results and generates a DNB number email
@@ -78,6 +97,8 @@ class DBScraper:
         while try_number <= max_search_tries:
             try:
                 self._load_dnb_search_page(handle_cookie_popup=False)
+                if self._check_access_denied():
+                    raise DNBServerException("DNB Access Denied. Rotate VPN")
                 self._search_for_company(company_name, company_city, company_zip, company_state)
                 break
             except NoSuchElementException:
@@ -87,7 +108,7 @@ class DBScraper:
 
             try_number += 1
 
-        if try_number == max_search_tries:
+        if try_number >= max_search_tries:
             self._logger.error("Could not locate search container after {max_search_tries} tries. Rotate server?")
             raise DNBServerException()
 
@@ -97,11 +118,12 @@ class DBScraper:
             raise DNBServerException("DNB server error")
 
         duns_results = self._email_and_extract_duns_results()
+        duns_results = [duns_result | {"company_name_search_term": company_name} for duns_result in duns_results]
         return duns_results
 
     def _search_for_company(self, company_name: str, company_city: str, company_zip: str, company_state: str) -> None:
         search_type_selector = Select(self._driver.find_element(By.NAME, "primary-reason-dropdown-select-component"))
-        search_type_selector.select_by_visible_text("My company")
+        search_type_selector.select_by_visible_text("Other company")
         search_form_div = self._driver.find_element(By.CLASS_NAME, "container-search")  # business search container with inputs
 
         # Fill in business name
@@ -123,6 +145,9 @@ class DBScraper:
 
         # Submit search
         search_box = self._driver.find_element(By.ID, 'submit-search')
+        self._center_element(search_box)
+        time.sleep(0.2)
+
         search_box.submit() 
         time.sleep(2)
 
@@ -138,7 +163,7 @@ class DBScraper:
 
     # Process an individual search result
     def _email_and_extract_duns_result(self, result_index: int) -> None:
-        self._logger.info(f"Processing dnb result #{result_index}")
+        self._logger.info(f"Processing dnb result #{result_index+1}")
 
         result_div = self._find_and_scroll_to_result_div(result_index)
         duns_results = self._extract_company_info(result_div)
@@ -146,11 +171,11 @@ class DBScraper:
 
         success_modal = self._look_for_success_modal()
         if success_modal is not None:
-            self._logger.info(f"Succesfully triggered email for result #{result_index}")
+            self._logger.info(f"Succesfully triggered email for result #{result_index+1}")
             duns_results["email_success"] = True
             duns_results["time_email_requested"] = arrow.now() - timedelta(seconds=5)
         else:
-            self._logger.warn(f"Could not trigger email for result #{result_index}")
+            self._logger.warn(f"Could not trigger email for result #{result_index+1}")
             time.sleep(1)  
             duns_results["email_success"] = False
 
@@ -180,7 +205,7 @@ class DBScraper:
         email_request_div = self._driver.find_element(By.CLASS_NAME, "requestform")
         
         # Fill in the email form fields 
-        email_request_div.find_element(By.NAME, 'FIRST_NAME').send_keys('Larry Boy') 
+        email_request_div.find_element(By.NAME, 'FIRST_NAME').send_keys('Ally Boy') 
         time.sleep(0.5)
         email_request_div.find_element(By.NAME, 'LAST_NAME').send_keys('Barese')
         time.sleep(0.5)
