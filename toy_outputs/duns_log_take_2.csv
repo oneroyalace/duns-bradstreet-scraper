@@ -1,1 +1,6 @@
 duns_name,duns_address,duns_phone,duns_type,company_status,email_success,time_email_requested,company_name_search_term,case_number,from_retry
+LIVE NATION,"885 S Main St,Mansfield,MA 02048-3148",508 337-5969,Single Location,Active,True,2024-11-22T10:23:32.854347-05:00,Live Nation,01-RC-022162,False
+BECKER BUILT LLC,"53 Highland Ln,West Springfield,MA 01089-4527",,Single Location,Active,True,2024-11-22T10:25:05.631300-05:00,Becker,01-RC-022281,False
+BECKER ASSOCIATES,"203 Circuit Ave,West Springfield,MA 01089-4030",413 733-1975,Single Location,Active,True,2024-11-22T10:25:20.590102-05:00,Becker,01-RC-022281,False
+BECKER ASSOCIATES,"719 Sumner Ave,Springfield,MA 01108-2438",413 734-9300,Single Location,Out Of Business,True,2024-11-22T10:25:35.523545-05:00,Becker,01-RC-022281,False
+"TOWER HILL NURSING, L.L.C","1 Meadowbrook Way,Canton,MA 02021-2496",781 961-5600,Single Location,Out Of Business,True,2024-11-22T10:27:31.584727-05:00,Tower Hill Nursing,01-RC-022298,False

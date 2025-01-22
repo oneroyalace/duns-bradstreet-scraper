@@ -1,12 +1,12 @@
 case_number,company_name,clean_name_1,clean_name_2,emp_1_city,emp_1_state,emp_1_zip,scrape_status
-01-RC-022162,Live Nation d/b/a DLC/Tea Party Concerts,Live Nation,Tea Party Concerts,Mansfield,MA,2048,
-01-RC-022243,Medical Care Development,Medical Care Development,,Augusta,ME,4330,
-01-RC-022272,"Goffstown Truck Center, Inc.",Goffstown Truck,,Acton,MA,1720,
-01-RC-022278,Able Engineering Services,Able Engineering,,Blackwood,NJ,8012,
-01-RC-022281,Becker College,Becker,,SPRINGFIELD,MA,1144,
-01-RC-022283,"First Student, Inc.",First Student,,Merrimac,MA,1860,
-01-RC-022284,Interstate Brand Corporation,Interstate Brand,,Augusta,ME,4330,
-01-RC-022298,Tower Hill Nursing LLC d/b/a Tower Hill Center for Health and Rehabilitation,Tower Hill Nursing,Tower Hill Rehab,Canton,MA,2021,
+01-RC-022162,Live Nation d/b/a DLC/Tea Party Concerts,Live Nation,Tea Party Concerts,Mansfield,MA,2048,1
+01-RC-022243,Medical Care Development,Medical Care Development,,Augusta,ME,4330,1
+01-RC-022272,"Goffstown Truck Center, Inc.",Goffstown Truck,,Acton,MA,1720,1
+01-RC-022278,Able Engineering Services,Able Engineering,,Blackwood,NJ,8012,1
+01-RC-022281,Becker College,Becker,,SPRINGFIELD,MA,1144,1
+01-RC-022283,"First Student, Inc.",First Student,,Merrimac,MA,1860,1
+01-RC-022284,Interstate Brand Corporation,Interstate Brand,,Augusta,ME,4330,1
+01-RC-022298,Tower Hill Nursing LLC d/b/a Tower Hill Center for Health and Rehabilitation,Tower Hill Nursing,Tower Hill Rehab,Canton,MA,2021,1
 01-RC-022301,"First Transit, Inc.",First Transit,,Framingham,MA,1702,
 01-RC-022304,Angelica Textiles,Angelica Textiles,,Somerville,MA,2143,
 01-RC-022312,UMass Memorial Medical Group,Memorial Medical,Massachusetts Memorial,Shrewsbury,MA,1545,
