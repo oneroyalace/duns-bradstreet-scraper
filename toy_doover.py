@@ -8,7 +8,7 @@ from datetime import timedelta
 from enum import Enum
 
 import arrow
-import pyautogui
+# import pyautogui
 
 from duns_bradstreet_scraper.duns_bradstreet_scraper import DBScraper, DNBServerException, DNBRejectionException
 
@@ -142,7 +142,7 @@ with open("toy_outputs/already_scraped.csv") as infile:
 logger = set_up_logger(logfile = "toy_outputs/doover.log")
 
 scraper = DBScraper(logger=logger)
-rotate_vpn_server()
+# rotate_vpn_server()
 scrapes_until_server_switch = 10
 
 class ScrapeStatus(Enum):
@@ -178,28 +178,28 @@ for case_ind, case_details in enumerate(cases_for_scraping):
 
     recent_exception_buffer = flush_exception_buffer(recent_exception_buffer)
 
-    if len(recent_exception_buffer) >= 5: 
-        logger.debug(f"\n*****Seen 5 exceptions in the last ten minutes. Sleeping for 3 minutes. ")
-        time.sleep(180)
-        scrapes_until_server_switch = 0
-    elif dnb_searches_since_last_sleep >= 7:
-        dnb_searches_since_last_sleep = 0
-        logger.info("\n_____Sleeping for ~45 seconds______")
-        time.sleep(44)
+    # if len(recent_exception_buffer) >= 5: 
+    #     logger.debug(f"\n*****Seen 5 exceptions in the last ten minutes. Sleeping for 3 minutes. ")
+    #     time.sleep(180)
+    #     scrapes_until_server_switch = 0
+    # elif dnb_searches_since_last_sleep >= 7:
+    #     dnb_searches_since_last_sleep = 0
+    #     logger.info("\n_____Sleeping for ~45 seconds______")
+    #     time.sleep(44)
 
     if not company_state:
         cases_for_scraping[case_ind]["scrape_status"] = ScrapeStatus.NO_COMPANY_GEOGRAPHY.value
-        logger.debug(f"\n*****Skipping case #{case_ind+1}/{len(cases_for_scraping)} ({case_number}: {company_name})*****. No company city/state available")
+        logger.debug(f"\n\n\n*****Skipping case #{case_ind+1}/{len(cases_for_scraping)} ({case_number}: {company_name})*****. No company city/state available")
         continue
 
     new_vpn_server = False
 
     if scrapes_until_server_switch <= 0:
-        rotate_vpn_server()
-        scrapes_until_server_switch = min(math.floor(random.gauss(13,5)), 3)
+        # rotate_vpn_server()
+        scrapes_until_server_switch = max(math.floor(random.gauss(13,5)), 3)
         new_vpn_server = True
 
-    logger.info(f"\n*****Processing case #{case_ind+1}/{len(cases_for_scraping)} ({case_number}: {company_name})*****")
+    logger.info(f"\n\n\n*****Processing case #{case_ind+1}/{len(cases_for_scraping)} ({case_number}: {company_name})*****")
     logger.info(f"Scrapes until server switch: {scrapes_until_server_switch}")
 
 
@@ -207,12 +207,13 @@ for case_ind, case_details in enumerate(cases_for_scraping):
         duns_results_name_1 = []
         duns_results_name_2 = []
 
+        logger.info("sleep 20 to check sensitivity")
         if (clean_name_1, company_city, company_state) in already_scraped:
             logger.info(f"Have already scapped DNB for details matching clean name 1: '{clean_name_1}' in {(company_city, company_state)}")
             cases_for_scraping[case_ind]["scrape_status"] = ScrapeStatus.MATCHES_EXISTING_SCRAPE.value
             continue
-
         else:
+            time.sleep(20)
             logger.info(f"Scraping for company w/ following details:")
             logger.info(f"Clean name (1): {clean_name_1}")
             logger.info(f"Company city: {company_city}")
@@ -235,7 +236,7 @@ for case_ind, case_details in enumerate(cases_for_scraping):
         if clean_name_2 and (clean_name_2, company_city, company_state) not in already_scraped :
             if not any([result["email_success"] for result in duns_results_name_1]):
                 logger.info(f"Scraping for company w/ following details:")
-                logger.info(f"Clean name (2): {clean_name_1}")
+                logger.info(f"Clean name (2): {clean_name_2}")
                 logger.info(f"Company city: {company_city}")
                 logger.info(f"Company state: {company_state}")
 
